@@ -91,7 +91,6 @@ public class AccountService {
         Account second = accounts.requireForUpdate(sourceFirst ? toAccountId : fromAccountId);
         Account source = sourceFirst ? first : second;
         Account destination = sourceFirst ? second : first;
-
         if (!source.canDebit(amount)) {
             throw new BankingException(BankingException.Code.INSUFFICIENT_FUNDS,
                     "balance " + source.balance() + " cannot fund " + amount);
