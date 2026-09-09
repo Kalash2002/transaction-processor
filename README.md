@@ -273,3 +273,23 @@ carrying information: it tells a client whether a retry is meaningful.
 | Page size over the maximum | 400 | Rejected, not clamped — ask for 1000, silently get 100, and you page on believing you saw everything |
 | Overdraft by any route | impossible | The zero floor is a rule of the account itself, so no route reaches around it |
 
+
+
+
+## 7. Decision Taken Through Development Process
+
+## Money, and why the precision rule is a `try/catch`
+
+`Money` validates on construction, so nothing downstream re-checks an amount (Part 1 §6). The rule
+I wanted was *two decimal places*, and the obvious spelling of it is wrong:
+
+| Check | `10.999` | `10.100` | Verdict |
+|---|---|---|---|
+| `scale() > 2` → reject | rejected | **rejected** | Wrong. `10.100` is `10.10` carrying a trailing zero. |
+| `setScale(2, UNNECESSARY)` in a `try/catch` | rejected | accepted | A precision rule, not a string-length rule. |
+
+`UNNECESSARY` also documents the arithmetic: adding and subtracting scale-2 values is exact, so no
+rounding ever happens, and offering a `RoundingMode` would imply a policy this domain has not
+chosen. If interest or a percentage fee is added later this throws — deliberately. That is the
+moment someone has to choose a rounding policy on purpose rather than inherit one.
+
