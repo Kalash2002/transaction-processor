@@ -324,3 +324,60 @@ rare, silent loss of money.
 There is no interface over either repository. With one implementation each, an interface would be a
 file that only forwards.
 
+
+## How to run it
+
+```bash
+mvn test        # needs Docker: the tests start their own Postgres via Testcontainers
+mvn test -DexcludedTestGroups=concurrency    # fast loop, skips the slow proofs
+```
+
+To run the service you need a database of your own. The tests do not — they start one.
+
+```bash
+docker run --name transactions-db -e POSTGRES_DB=transactions \
+  -e POSTGRES_USER=transactions -e POSTGRES_PASSWORD=transactions \
+  -p 5432:5432 -d postgres:16-alpine
+
+mvn spring-boot:run      # Flyway applies the migration on startup, http://localhost:8080
+
+docker rm -fv transactions-db    # -v drops the data volume as well as the container
+```
+
+One container, so there is no compose file: it would be a second way to do the same thing and the
+test suite would not use it.
+
+Java 21, Maven 3.9+, Docker.
+
+## API
+
+The full definition, including request bodies and every error, is in Part 1 §7. This is the
+summary:
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/accounts` | Open an account with an initial balance |
+| GET | `/accounts/{id}` | Current balance |
+| POST | `/accounts/{id}/deposits` | Pay in |
+| POST | `/accounts/{id}/withdrawals` | Take out |
+| POST | `/transfers` | Move money between two accounts |
+| GET | `/accounts/{id}/transactions?page=&size=` | Paginated history |
+
+Errors are `application/problem+json` with a stable `errorCode`: 400 for malformed input, 404 for
+an unknown account, 409 for insufficient funds, 422 for a self-transfer.
+
+```bash
+A=$(curl -s -XPOST localhost:8080/accounts -H 'Content-Type: application/json' \
+     -d '{"initialBalance":"250.00"}' | jq -r .accountId)
+B=$(curl -s -XPOST localhost:8080/accounts -H 'Content-Type: application/json' \
+     -d '{"initialBalance":"0.00"}' | jq -r .accountId)
+
+curl -XPOST localhost:8080/accounts/$A/deposits    -H 'Content-Type: application/json' -d '{"amount":"50.00"}'
+curl -XPOST localhost:8080/accounts/$A/withdrawals -H 'Content-Type: application/json' -d '{"amount":"25.00"}'
+curl -XPOST localhost:8080/transfers -H 'Content-Type: application/json' \
+     -d "{\"fromAccountId\":\"$A\",\"toAccountId\":\"$B\",\"amount\":\"100.00\"}"
+
+curl localhost:8080/accounts/$A
+curl "localhost:8080/accounts/$A/transactions?page=0&size=2"
+```
+
