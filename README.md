@@ -367,17 +367,28 @@ Errors are `application/problem+json` with a stable `errorCode`: 400 for malform
 an unknown account, 409 for insufficient funds, 422 for a self-transfer.
 
 ```bash
-A=$(curl -s -XPOST localhost:8080/accounts -H 'Content-Type: application/json' \
-     -d '{"initialBalance":"250.00"}' | jq -r .accountId)
-B=$(curl -s -XPOST localhost:8080/accounts -H 'Content-Type: application/json' \
-     -d '{"initialBalance":"0.00"}' | jq -r .accountId)
+$A = (curl.exe -s -X POST http://localhost:8080/accounts `
+  -H "Content-Type: application/json" `
+  -d '{"initialBalance":"250.00"}' | ConvertFrom-Json).accountId
 
-curl -XPOST localhost:8080/accounts/$A/deposits    -H 'Content-Type: application/json' -d '{"amount":"50.00"}'
-curl -XPOST localhost:8080/accounts/$A/withdrawals -H 'Content-Type: application/json' -d '{"amount":"25.00"}'
-curl -XPOST localhost:8080/transfers -H 'Content-Type: application/json' \
-     -d "{\"fromAccountId\":\"$A\",\"toAccountId\":\"$B\",\"amount\":\"100.00\"}"
+$B = (curl.exe -s -X POST http://localhost:8080/accounts `
+  -H "Content-Type: application/json" `
+  -d '{"initialBalance":"0.00"}' | ConvertFrom-Json).accountId
 
-curl localhost:8080/accounts/$A
-curl "localhost:8080/accounts/$A/transactions?page=0&size=2"
+curl.exe -X POST http://localhost:8080/accounts/$A/deposits `
+  -H "Content-Type: application/json" `
+  -d '{"amount":"50.00"}'
+
+curl.exe -X POST http://localhost:8080/accounts/$A/withdrawals `
+  -H "Content-Type: application/json" `
+  -d '{"amount":"25.00"}'
+
+curl.exe -X POST http://localhost:8080/transfers `
+  -H "Content-Type: application/json" `
+  -d "{`"fromAccountId`":`"$A`",`"toAccountId`":`"$B`",`"amount`":`"100.00`"}"
+
+curl.exe http://localhost:8080/accounts/$A
+
+curl.exe "http://localhost:8080/accounts/$A/transactions?page=0&size=2"
 ```
 
