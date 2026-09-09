@@ -293,3 +293,34 @@ rounding ever happens, and offering a `RoundingMode` would imply a policy this d
 chosen. If interest or a percentage fee is added later this throws — deliberately. That is the
 moment someone has to choose a rounding policy on purpose rather than inherit one.
 
+
+## Why the lock is in the database
+
+The read and the write of one balance have to be a single indivisible step, or two concurrent
+operations lose one of them. Four ways to get that:
+
+| Option | Why not |
+|---|---|
+| `synchronized` on the service method | Serialises every account against every other, and buys nothing the moment a second instance starts. |
+| A `ReentrantLock` per account in a `ConcurrentHashMap` | Faster to write, and the concurrency argument would be entirely mine. But the guarantee is a JVM lock — with two instances it silently stops holding, which is exactly when someone is relying on it. |
+| Optimistic locking: a version column and a retry loop | Right for read-heavy workloads. Every operation here writes a hot row, so it would spend its time retrying. |
+| **`SELECT … FOR UPDATE` inside the transaction** | **Chosen.** Four words of SQL, scoped to one account, and it still holds with two instances. |
+
+Cost accepted: the suite now needs Docker and runs in about 40s instead of 2s.
+
+**The `CHECK (balance >= 0)` constraint is not a substitute for any of this.** It catches an
+overdraft. It does not catch a *lost update*, because a lost update leaves a perfectly valid,
+non-negative number in the row. Phase 6 measures precisely that.
+
+## Two reads, two names
+
+`findById` takes no lock. `requireForUpdate` locks the row until the transaction ends.
+
+They are separate methods with different names because that is the difference a call site must not
+get wrong. A single `findById(id, boolean lock)` puts the safe and the unsafe read one keystroke
+apart, in a codebase where picking the wrong one produces no error and no test failure — only a
+rare, silent loss of money.
+
+There is no interface over either repository. With one implementation each, an interface would be a
+file that only forwards.
+
